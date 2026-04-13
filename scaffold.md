@@ -1377,7 +1377,11 @@ NuGet packages:
 
 ---
 
-## Step 8 — Final Output Checklist
+## Step 8 - Copy Agents
+
+`.github/agents` contains some reusable agents which can be directly copied over to the correct directory, so that they can be further used in the newly generated solutions
+
+## Step 9 — Final Output Checklist
 
 Before finishing, confirm and provide all of the following:
 
@@ -1389,6 +1393,7 @@ Before finishing, confirm and provide all of the following:
 - [ ] `appsettings.json` template with all required keys populated
 - [ ] `README.md` (full content)
 - [ ] `.github/copilot-instructions.md` — fully populated based on all user selections (architecture, auth, cloud provider, HTTP clients, multi-tenant, testing, Docker)
+- [ ] Copy agents from `.github/agents` to correct directory
 - [ ] Docker files (if selected)
 - [ ] Test project scaffolding with example tests (if selected)
 - [ ] Cloud provider service classes and registration (if Azure or AWS selected)
