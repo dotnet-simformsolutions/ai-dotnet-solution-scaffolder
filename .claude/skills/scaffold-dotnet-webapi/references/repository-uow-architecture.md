@@ -1,6 +1,6 @@
 # Repository + Unit of Work Pattern — Detailed Instruction File
 
-> This file is loaded automatically when the user selects **Repository + Unit of Work Pattern** in `scaffold.md`.
+> This file is read and applied when the user selects **Repository + Unit of Work Pattern** in the `scaffold-dotnet-webapi` skill.
 > Follow every section completely. Do not skip layers, rules, or code examples.
 
 ---
@@ -822,7 +822,7 @@ builder.Services.AddValidatorsFromAssemblyContaining<CreateUserRequestValidator>
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(/* configure as in scaffold.md */);
+builder.Services.AddSwaggerGen(/* configure as in the scaffold-dotnet-webapi skill */);
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -1162,7 +1162,7 @@ public class UserServiceTests
 
 ## 18. Cloud Provider Services (Conditional — apply only if cloud provider selected)
 
-> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of `scaffold.md`.
+> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of the `scaffold-dotnet-webapi` skill.
 
 In the Repository + Unit of Work architecture, all cloud/external integrations live in the **`{Project}.ThirdParty`** project.
 
@@ -1274,7 +1274,7 @@ public sealed class DocumentService : IDocumentService
 
 ## 19. Third-Party HTTP Client Integration with Polly (Conditional)
 
-> Generate this section only when the user selected **Yes** in Question 1.9 of `scaffold.md`.
+> Generate this section only when the user selected **Yes** in Question 1.9 of the `scaffold-dotnet-webapi` skill.
 
 All typed HTTP client work lives in the **`{Project}.ThirdParty`** project.
 

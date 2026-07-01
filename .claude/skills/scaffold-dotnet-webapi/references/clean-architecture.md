@@ -1,6 +1,6 @@
 # Clean Architecture — Detailed Instruction File
 
-> This file is loaded automatically when the user selects **Clean Architecture** in `scaffold.md`.
+> This file is read and applied when the user selects **Clean Architecture** in the `scaffold-dotnet-webapi` skill.
 > Follow every section completely. Do not skip layers, rules, or code examples.
 
 ---
@@ -1104,7 +1104,7 @@ public class CreateUserCommandHandlerTests
 
 ## 18. Cloud Provider Services (Conditional — apply only if cloud provider selected)
 
-> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of `scaffold.md`.
+> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of the `scaffold-dotnet-webapi` skill.
 
 ### 18.1 — Folder Structure
 
@@ -1190,7 +1190,7 @@ public sealed class UploadProfilePictureCommandHandler
 
 ## 19. Third-Party HTTP Client Integration with Polly (Conditional)
 
-> Generate this section only when the user selected **Yes** in Question 1.9 of `scaffold.md`.
+> Generate this section only when the user selected **Yes** in Question 1.9 of the `scaffold-dotnet-webapi` skill.
 
 ### 19.1 — Folder Structure
 
