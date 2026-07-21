@@ -1,7 +1,9 @@
 ---
-description: "Use when editing C# files. Provides lightweight performance hints and best practices for C# code including async/await patterns, memory management, LINQ optimization, and common anti-patterns to avoid."
-applyTo: "**/*.cs"
+paths:
+  - "**/*.cs"
 ---
+
+<!-- Use when editing C# files. Provides lightweight performance hints and best practices for C# code including async/await patterns, memory management, LINQ optimization, and common anti-patterns to avoid. -->
 
 # C# Performance Guidelines
 
@@ -77,4 +79,4 @@ When editing C# code, keep these performance best practices in mind:
 
 ---
 
-For detailed analysis, invoke the **Performance Tuning Advisor** agent or use `/csharp-perf-analysis` skill.
+For detailed analysis, invoke the `csharp-perf-analysis` skill.

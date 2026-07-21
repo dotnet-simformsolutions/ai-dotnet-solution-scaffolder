@@ -1,6 +1,6 @@
 # Vertical Slice Architecture — Detailed Instruction File
 
-> This file is loaded automatically when the user selects **Vertical Slice Architecture** in `scaffold.md`.
+> This file is read and applied when the user selects **Vertical Slice Architecture** in the `scaffold-dotnet-webapi` skill.
 > Follow every section completely. Do not skip features, rules, or code examples.
 
 ---
@@ -1079,7 +1079,7 @@ var users = await _dbContext.Users
 
 ## 22. Cloud Provider Services (Conditional — apply only if cloud provider selected)
 
-> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of `scaffold.md`.
+> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of the `scaffold-dotnet-webapi` skill.
 
 In Vertical Slice Architecture, cloud service **implementations** live in `{Project}.Infrastructure` and **interfaces** live inside `{Project}.Api/Common/Interfaces/`.
 
@@ -1179,7 +1179,7 @@ public sealed class UploadDocumentHandler : IRequestHandler<UploadDocumentComman
 
 ## 23. Third-Party HTTP Client Integration with Polly (Conditional)
 
-> Generate this section only when the user selected **Yes** in Question 1.9 of `scaffold.md`.
+> Generate this section only when the user selected **Yes** in Question 1.9 of the `scaffold-dotnet-webapi` skill.
 
 ### 23.1 — Folder Structure
 

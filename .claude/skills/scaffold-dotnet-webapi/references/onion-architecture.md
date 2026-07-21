@@ -1,6 +1,6 @@
 # Onion Architecture — Detailed Instruction File
 
-> This file is loaded automatically when the user selects **Onion Architecture** in `scaffold.md`.
+> This file is read and applied when the user selects **Onion Architecture** in the `scaffold-dotnet-webapi` skill.
 > Follow every section completely. Do not skip layers, rules, or code examples.
 
 ---
@@ -701,7 +701,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(/* see scaffold.md */);
+builder.Services.AddSwaggerGen(/* see the scaffold-dotnet-webapi skill */);
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -936,7 +936,7 @@ public class UserServiceTests
 
 ## 16. Cloud Provider Services (Conditional — apply only if cloud provider selected)
 
-> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of `scaffold.md`.
+> Generate this section only when the user selected **Azure** or **AWS** in Question 1.8 of the `scaffold-dotnet-webapi` skill.
 
 ### 16.1 — Folder Structure
 
@@ -1041,7 +1041,7 @@ public sealed class DocumentService : IDocumentService
 
 ## 17. Third-Party HTTP Client Integration with Polly (Conditional)
 
-> Generate this section only when the user selected **Yes** in Question 1.9 of `scaffold.md`.
+> Generate this section only when the user selected **Yes** in Question 1.9 of the `scaffold-dotnet-webapi` skill.
 
 ### 17.1 — Folder Structure
 
