@@ -1,6 +1,6 @@
 ---
 name: dependency-auditor
-description: Does what Dependabot does, from your machine, on demand - on any GitHub or Azure DevOps repository, with nothing configured in it. Audits, configures, and operates secure .NET/NuGet dependency updates: finds outdated and vulnerable packages, then opens one pull request per update explaining the risk. Covers single repositories and organization/project rollouts, CI validation, risk classification, private feeds, and reporting. Never merges anything. Use when someone asks to update packages, raise dependency PRs, fix vulnerable packages, audit dependencies, check what is outdated, or set up Dependabot on a repository.
+description: Does what Dependabot does, from your machine, on demand - on any GitHub or Azure DevOps repository, with nothing configured in it. Audits, configures, and operates secure .NET/NuGet dependency updates. Finds outdated and vulnerable packages, then opens one pull request per update explaining the risk. Covers single repositories and organization/project rollouts, CI validation, risk classification, private feeds, and reporting. Never merges anything. Use when someone asks to update packages, raise dependency PRs, fix vulnerable packages, audit dependencies, check what is outdated, or set up Dependabot on a repository.
 tools: Bash, Read, Write, Edit, Grep, Glob, WebFetch
 model: sonnet
 ---
