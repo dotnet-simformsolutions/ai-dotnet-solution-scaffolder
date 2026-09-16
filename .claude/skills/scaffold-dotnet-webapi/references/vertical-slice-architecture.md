@@ -1066,6 +1066,11 @@ public class CreateUserTests : IClassFixture<TestWebApplicationFactory>
 
 ## 21. Multi-Tenant Support for Vertical Slice (If Selected)
 
+> Which option to follow is determined by Question 1.5.1 of the
+> `scaffold-dotnet-webapi` skill.
+
+### 21.1 — Option A: Shared Database (1.5.1 = [1])
+
 Add `TenantId` to `BaseEntity`. Resolve the tenant in `TenantMiddleware` and store it in a scoped `ITenantContext` service. In each handler, filter queries by `tenantContext.TenantId`. Apply global query filter on `ApplicationDbContext.OnModelCreating`.
 
 ```csharp
@@ -1073,6 +1078,352 @@ Add `TenantId` to `BaseEntity`. Resolve the tenant in `TenantMiddleware` and sto
 var users = await _dbContext.Users
     .Where(u => u.TenantId == _tenantContext.TenantId)
     .ToListAsync(cancellationToken);
+```
+
+---
+
+### 21.2 — Option B: Database per Tenant (1.5.1 = [2])
+
+Adds two new projects to the solution — `{Project}.TenantCatalog` (catalog
+database) and `{Project}.TenantMigrator` (standalone migration console app)
+— alongside the existing `{Project}.Infrastructure` (now used for the
+per-tenant business database).
+
+#### 21.2.1 — Solution Structure Addition
+
+```
+{Project}.sln
+│
+├── src/
+│   ├── {Project}.Api/
+│   ├── {Project}.Infrastructure/       ← now the PER-TENANT business database
+│   ├── {Project}.TenantCatalog/        ← NEW — catalog database
+│   └── {Project}.TenantMigrator/       ← NEW — standalone console app
+```
+
+#### 21.2.2 — Project Reference Rules (Additions)
+
+```
+{Project}.Api
+    └── references {Project}.TenantCatalog   ← in addition to existing references, for DI wiring only
+
+{Project}.Infrastructure
+    └── references {Project}.TenantCatalog   ← to resolve per-tenant connection strings
+
+{Project}.TenantMigrator
+    ├── references {Project}.TenantCatalog
+    └── references {Project}.Infrastructure
+
+{Project}.TenantCatalog
+    └── NO references (only the EF Core provider package)
+```
+
+> **Critical rule:** `{Project}.TenantMigrator` must **never** be referenced
+> by `{Project}.Api` or vice versa — it is a fully standalone console tool,
+> independent of the running API.
+
+#### 21.2.3 — `{Project}.TenantCatalog` Folder Structure
+
+```
+{Project}.TenantCatalog/
+├── Entities/
+│   └── Tenant.cs
+├── Persistence/
+│   ├── TenantDbContext.cs
+│   ├── Configurations/
+│   │   └── TenantConfiguration.cs
+│   └── Migrations/
+├── Services/
+│   ├── ITenantService.cs
+│   └── TenantService.cs
+└── DependencyInjection.cs
+```
+
+**Tenant Entity:**
+
+```csharp
+// TenantCatalog/Entities/Tenant.cs
+namespace {Project}.TenantCatalog.Entities;
+
+public sealed class Tenant
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Identifier { get; set; } = string.Empty; // header / subdomain value
+    public string Name { get; set; } = string.Empty;
+    public string ConnectionString { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+```
+
+**TenantDbContext:**
+
+```csharp
+// TenantCatalog/Persistence/TenantDbContext.cs
+namespace {Project}.TenantCatalog.Persistence;
+
+public sealed class TenantDbContext : DbContext
+{
+    public TenantDbContext(DbContextOptions<TenantDbContext> options) : base(options) { }
+
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+        base.OnModelCreating(modelBuilder);
+    }
+}
+```
+
+**Tenant Configuration:**
+
+```csharp
+// TenantCatalog/Persistence/Configurations/TenantConfiguration.cs
+namespace {Project}.TenantCatalog.Persistence.Configurations;
+
+public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
+{
+    public void Configure(EntityTypeBuilder<Tenant> builder)
+    {
+        builder.ToTable("Tenants");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Identifier).IsRequired().HasMaxLength(100);
+        builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        builder.Property(x => x.ConnectionString).IsRequired();
+        builder.HasIndex(x => x.Identifier).IsUnique();
+    }
+}
+```
+
+**ITenantService:**
+
+```csharp
+// TenantCatalog/Services/ITenantService.cs
+namespace {Project}.TenantCatalog.Services;
+
+/// <summary>Resolves the current tenant and its dedicated database connection string.</summary>
+public interface ITenantService
+{
+    string? TenantIdentifier { get; }
+    Task<Tenant?> GetCurrentTenantAsync(CancellationToken cancellationToken = default);
+    Task<string> GetConnectionStringAsync(CancellationToken cancellationToken = default);
+}
+```
+
+**TenantService:**
+
+```csharp
+// TenantCatalog/Services/TenantService.cs
+namespace {Project}.TenantCatalog.Services;
+
+public sealed class TenantService : ITenantService
+{
+    private readonly TenantDbContext _catalogContext;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private Tenant? _cachedTenant;
+
+    public TenantService(TenantDbContext catalogContext, IHttpContextAccessor httpContextAccessor)
+    {
+        _catalogContext = catalogContext;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public string? TenantIdentifier =>
+        _httpContextAccessor.HttpContext?.Request.Headers["X-Tenant-Id"].FirstOrDefault();
+
+    public async Task<Tenant?> GetCurrentTenantAsync(CancellationToken cancellationToken = default)
+    {
+        if (_cachedTenant is not null) return _cachedTenant;
+
+        if (string.IsNullOrWhiteSpace(TenantIdentifier))
+            throw new InvalidOperationException("Tenant identifier header 'X-Tenant-Id' is missing.");
+
+        _cachedTenant = await _catalogContext.Tenants
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Identifier == TenantIdentifier && t.IsActive, cancellationToken)
+            ?? throw new InvalidOperationException($"Tenant '{TenantIdentifier}' was not found or is inactive.");
+
+        return _cachedTenant;
+    }
+
+    public async Task<string> GetConnectionStringAsync(CancellationToken cancellationToken = default)
+    {
+        var tenant = await GetCurrentTenantAsync(cancellationToken);
+        return tenant!.ConnectionString;
+    }
+}
+```
+
+**TenantCatalog DependencyInjection:**
+
+```csharp
+// TenantCatalog/DependencyInjection.cs
+namespace {Project}.TenantCatalog;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddTenantCatalog(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddDbContext<TenantDbContext>(options =>
+            options.UseSqlServer(configuration.GetConnectionString("TenantCatalogConnection"),
+                b => b.MigrationsAssembly(typeof(TenantDbContext).Assembly.FullName)));
+
+        services.AddHttpContextAccessor();
+        services.AddScoped<ITenantService, TenantService>();
+
+        return services;
+    }
+}
+```
+
+#### 21.2.4 — `{Project}.Infrastructure` Registration Changes
+
+The per-tenant `ApplicationDbContext` now resolves its connection string from
+`ITenantService` (catalog lookup) instead of a static `appsettings.json`
+value:
+
+```csharp
+// Infrastructure/DependencyInjection.cs (Option B variant)
+namespace {Project}.Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddDbContext<ApplicationDbContext>((sp, options) =>
+        {
+            var tenantService = sp.GetRequiredService<ITenantService>();
+            var connectionString = tenantService.GetConnectionStringAsync()
+                .GetAwaiter().GetResult();
+
+            options.UseSqlServer(connectionString,
+                b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName));
+        });
+
+        services.AddScoped<ITokenService, TokenService>();
+        services.Configure<JwtSettings>(configuration.GetSection(nameof(JwtSettings)));
+
+        return services;
+    }
+}
+```
+
+`Program.cs` registers both:
+
+```csharp
+builder.Services.AddTenantCatalog(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration);
+```
+
+#### 21.2.5 — `{Project}.TenantMigrator` — Standalone Console App
+
+A plain .NET console application (Generic Host) — **not** an ASP.NET Core
+project, no reference to `{Project}.Api`. It loops over every active tenant
+in the catalog and applies pending migrations to that tenant's database.
+
+```
+{Project}.TenantMigrator/
+├── Program.cs
+├── appsettings.json
+└── {Project}.TenantMigrator.csproj
+```
+
+```csharp
+// TenantMigrator/Program.cs
+using {Project}.Infrastructure.Persistence;
+using {Project}.TenantCatalog.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false)
+    .Build();
+
+using var loggerFactory = LoggerFactory.Create(b => b.AddConsole());
+var logger = loggerFactory.CreateLogger("TenantMigrator");
+
+var catalogOptions = new DbContextOptionsBuilder<TenantDbContext>()
+    .UseSqlServer(configuration.GetConnectionString("TenantCatalogConnection"))
+    .Options;
+
+await using var catalogContext = new TenantDbContext(catalogOptions);
+var tenants = await catalogContext.Tenants
+    .Where(t => t.IsActive)
+    .ToListAsync();
+
+logger.LogInformation("Found {Count} active tenant(s) to migrate.", tenants.Count);
+
+foreach (var tenant in tenants)
+{
+    logger.LogInformation("Migrating tenant '{Identifier}'...", tenant.Identifier);
+
+    var tenantOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
+        .UseSqlServer(tenant.ConnectionString)
+        .Options;
+
+    await using var tenantContext = new ApplicationDbContext(tenantOptions);
+    await tenantContext.Database.MigrateAsync();
+
+    logger.LogInformation("Tenant '{Identifier}' migrated successfully.", tenant.Identifier);
+}
+
+logger.LogInformation("Tenant migration run complete.");
+```
+
+```json
+// TenantMigrator/appsettings.json
+{
+  "ConnectionStrings": {
+    "TenantCatalogConnection": "Server=.;Database={Project}TenantCatalogDb;Trusted_Connection=True;TrustServerCertificate=True"
+  }
+}
+```
+
+**`{Project}.TenantMigrator.csproj`:**
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="*" />
+    <!-- or Npgsql.EntityFrameworkCore.PostgreSQL, matching Question 1.2 -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="*" />
+  </ItemGroup>
+</Project>
+```
+
+**Run it independently of the API:**
+
+```bash
+dotnet run --project src/{Project}.TenantMigrator
+```
+
+#### 21.2.6 — CLI Commands Addendum (append to Section 17)
+
+```bash
+dotnet new classlib -o src/{Project}.TenantCatalog --framework net10.0
+dotnet new console  -o src/{Project}.TenantMigrator --framework net10.0
+
+dotnet sln add src/{Project}.TenantCatalog/{Project}.TenantCatalog.csproj
+dotnet sln add src/{Project}.TenantMigrator/{Project}.TenantMigrator.csproj
+
+dotnet add src/{Project}.Api reference src/{Project}.TenantCatalog
+dotnet add src/{Project}.Infrastructure reference src/{Project}.TenantCatalog
+dotnet add src/{Project}.TenantMigrator reference src/{Project}.TenantCatalog
+dotnet add src/{Project}.TenantMigrator reference src/{Project}.Infrastructure
 ```
 
 ---
