@@ -72,8 +72,21 @@ Which authentication mechanism do you need?
 
 Do you need Multi-Tenant Architecture support?
 
-- **Yes** — implement tenant resolution (header/subdomain), tenant-scoped DbContext, and global query filters for tenant isolation
+- **Yes** — implement tenant resolution (header/subdomain) and tenant data isolation
 - **No** — single-tenant application
+
+> If **Yes**, ask the following follow-up question before proceeding.
+
+#### 1.5.1 — Tenant Database Strategy (only if 1.5 = Yes)
+
+How should tenant data be isolated?
+
+- **[1]** Shared Database — a single database for all tenants; every entity carries a `TenantId` column and a global EF Core query filter enforces isolation.
+- **[2]** Database per Tenant — each tenant gets its own physical database (same schema), plus a small shared **catalog database** that stores the tenant registry (identifier, name, connection string, active flag).
+
+> The chosen database provider from Question 1.2 (SQL Server or PostgreSQL) is used for **both** the catalog database and every tenant database when Option 2 is selected — only the connection strings differ.
+>
+> Refer to the selected architecture instruction file's Multi-Tenant section (**Option A** = Shared Database, **Option B** = Database per Tenant) for the concrete implementation.
 
 ---
 
@@ -871,6 +884,32 @@ public static IServiceCollection RegisterHttpClients(this IServiceCollection ser
 
 ---
 
+### 2.15 — Multi-Tenant Database Strategy (Conditional)
+
+> Apply **only** when the user selected **Yes** in Question 1.5. Which sub-option below applies depends on the answer to Question 1.5.1.
+
+#### Option A — Shared Database (1.5.1 = [1])
+
+- Single database, using the provider selected in Question 1.2.
+- Every entity's `BaseEntity` gets a `TenantId` property.
+- A global EF Core query filter (`HasQueryFilter`) restricts every query to the current tenant, resolved via a scoped `ITenantService`/`ITenantContext`.
+- Tenant resolution happens in `TenantMiddleware` (header `X-Tenant-Id` or subdomain), registered before `UseAuthentication`.
+
+#### Option B — Database per Tenant (1.5.1 = [2])
+
+- **Two databases**, both using the provider selected in Question 1.2:
+  1. A **catalog database** holding the tenant registry (`Tenant` entity: `Id`, `Identifier`, `Name`, `ConnectionString`, `IsActive`, `CreatedAt`).
+  2. The existing business-data database, **physically replicated per tenant** — entities do **not** need a `TenantId` column, since isolation is physical rather than logical.
+- **Two separate class libraries**, one per database:
+  - `{Project}.TenantCatalog` — new, self-contained class library owning the catalog database (`TenantDbContext`, `Tenant` entity/configuration, `ITenantService`/`TenantService` which resolves the current tenant's connection string from a request header/subdomain and looks it up in the catalog).
+  - The architecture's existing Infrastructure/Database project — owns the tenant-level `ApplicationDbContext`, now built with a connection string resolved per-request from `ITenantService` instead of a static `appsettings.json` value.
+- A **standalone console application**, `{Project}.TenantMigrator`, applies pending EF Core migrations to every active tenant database (read from the catalog). It references only `{Project}.TenantCatalog` and the architecture's Infrastructure/Database project — it must **never** reference, or be referenced by, `{Project}.Api` or any Application/Service layer. Run it independently of the API (e.g. `dotnet run --project src/{Project}.TenantMigrator`) as a deployment step whenever new migrations are added.
+- `{Project}.Api` references `{Project}.TenantCatalog` (in addition to the Infrastructure/Database project) purely for DI wiring (`AddTenantCatalog`) in `Program.cs`.
+
+> Refer to the selected architecture instruction file's Multi-Tenant section for the exact folder structure, project reference rules, and DI registration code for both options.
+
+---
+
 ## Step 3 — Authentication Implementation
 
 Implement the selected auth option as described below.
@@ -1369,7 +1408,42 @@ NuGet packages:
 
 ### 7.8 — Multi-Tenant (include only if Question 1.5 = Yes)
 - Tenant resolution strategy (header / subdomain).
-- Tenant-scoped DbContext and global query filter description.
+- Tenant database strategy selected in Question 1.5.1:
+
+#### If Shared Database (Option A):
+```
+Tenant Database Strategy: Shared Database
+
+- Single database, TenantId column on every entity
+- Global EF Core query filter enforces tenant isolation
+- Tenant resolved per-request via ITenantService / TenantMiddleware
+```
+
+#### If Database per Tenant (Option B):
+```
+Tenant Database Strategy: Database per Tenant
+
+Databases:
+- Catalog database (tenant registry) — owned by {Project}.TenantCatalog
+- Tenant database (business data) — one physical database per tenant, same
+  schema, owned by the existing Infrastructure/Database project
+
+Class libraries:
+- {Project}.TenantCatalog — TenantDbContext, Tenant entity, ITenantService
+- {Project}.<Infrastructure|Database> — ApplicationDbContext, connection
+  string resolved per-request from ITenantService
+
+Standalone tooling:
+- {Project}.TenantMigrator — console app, applies pending migrations to
+  every active tenant database; run via:
+  dotnet run --project src/{Project}.TenantMigrator
+- Never referenced by, and never references, {Project}.Api
+
+appsettings.json keys:
+- ConnectionStrings:TenantCatalogConnection (catalog database)
+- Each tenant's own connection string is stored in the Tenant.ConnectionString
+  column of the catalog database, not in appsettings.json
+```
 
 ### 7.9 — Testing (include only if Question 1.7 = Yes)
 - Unit test project: handlers/services, Moq + AutoFixture + FluentAssertions, 90% coverage target.
@@ -1403,5 +1477,6 @@ Before finishing, confirm and provide all of the following:
 - [ ] Test project scaffolding with example tests (if selected)
 - [ ] Cloud provider service classes and registration (if Azure or AWS selected)
 - [ ] Typed HTTP client classes with Polly resilience pipeline (if third-party HTTP integration selected)
+- [ ] `{Project}.TenantCatalog` class library + standalone `{Project}.TenantMigrator` console app (if Database per Tenant strategy selected in Question 1.5.1)
 
 **Do NOT skip any step. Do NOT produce placeholder comments instead of real, compilable code.**
